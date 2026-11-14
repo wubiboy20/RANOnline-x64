@@ -1,0 +1,44 @@
+name: Build EP7 (Win32 + x64)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build Win32 (Release)
+        shell: pwsh
+        run: |
+          msbuild RanOnline.sln /m /p:Configuration=Release /p:Platform=Win32 /fl /flp:logfile=build-win32.log`;verbosity=normal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build x64 (Release)
+        shell: pwsh
+        run: |
+          msbuild RanOnline.sln /m /p:Configuration=Release /p:Platform=x64 /fl /flp:logfile=build-x64.log`;verbosity=normal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect outputs
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build-output | Out-Null
+          $gc = Join-Path $env:GITHUB_WORKSPACE '..\game-client'
+          if (Test-Path $gc) { Copy-Item $gc build-output\game-client -Recurse -Force }
+          Copy-Item build-win32.log, build-x64.log build-output\ -Force -ErrorAction SilentlyContinue
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ran-ep7-binaries
+          path: build-output
+          if-no-files-found: warn
